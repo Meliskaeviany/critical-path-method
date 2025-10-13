@@ -109,7 +109,7 @@ def calculate_cpm(data, show_dummy):
                 edge_color='green',
                 width=1,
                 arrows=True,
-                arrowsize=20
+                arrowsize=20,
                 connectionstyle='arc3,rad=0.0',
                 dashes=(5, 5)  # ✅ panjang dan jarak putus-putus (bisa diubah)
             )
@@ -175,4 +175,5 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
+
 
