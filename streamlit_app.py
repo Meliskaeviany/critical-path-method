@@ -107,12 +107,10 @@ def calculate_cpm(data, show_dummy):
                 edgelist=dummy_edges,
                 style='dashed',
                 edge_color='black',
-                width=1.5,            # bisa agak tebal biar kelihatan
+                width=1,
                 arrows=True,
-                arrowsize=20,
-                dashes=(12, 6)        # 🔹 atur jarak putus-putus di sini
-        )
-
+                arrowsize=20
+            )
 
         plt.title(f'Critical Path: {" → ".join(critical_path)}\nTotal Duration: {critical_path_duration} hari', fontsize=20)
         plt.axis('off')
@@ -175,5 +173,4 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
-
 
