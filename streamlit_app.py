@@ -16,7 +16,7 @@ def load_data(uploaded_file):
     return pd.read_csv(uploaded_file)
 
 # Fungsi utama hitung CPM dan visualisasi dengan dummy edge putus-putus hitam
-def calculate_cpm(data):
+def calculate_cpm(data, show_dummy):
     G = nx.DiGraph()
     all_nodes = set(data['Notasi'].tolist())
 
@@ -32,14 +32,12 @@ def calculate_cpm(data):
     # Tambah edge asli sesuai predecessor
     for _, row in data.iterrows():
         predecessors = str(row['Kegiatan Yang Mendahului']).split(',')
-        clean_preds = []
         for predecessor in predecessors:
             predecessor = predecessor.strip()
             if predecessor == '-' or predecessor == '':
                 continue
             if predecessor in all_nodes:
                 G.add_edge(predecessor, row['Notasi'])
-                clean_preds.append(predecessor)
             else:
                 st.warning(f"Notasi '{predecessor}' tidak ditemukan di data. (Node: '{row['Notasi']}')")
 
@@ -78,17 +76,15 @@ def calculate_cpm(data):
             G.nodes[node]['level'] = G.nodes[node]['early_start']
         pos = nx.multipartite_layout(G, subset_key="level")
 
-        # Buat dummy edges (putus-putus hitam) antar predecessor node dengan >1 predecessor
+        # === BUAT DUMMY EDGES OTOMATIS (PUTUS-PUTUS HITAM) ===
         dummy_edges = []
-        for _, row in data.iterrows():
-            predecessors = [p.strip() for p in str(row['Kegiatan Yang Mendahului']).split(',') if p.strip() not in ('', '-')]
-            if len(predecessors) > 1:
-                # Buat dummy edges berurutan antar predecessor
-                for i in range(len(predecessors) - 1):
-                    u, v = predecessors[i], predecessors[i + 1]
-                    # Jika edge asli tidak ada, tambahkan dummy edge
-                    if not G.has_edge(u, v) and not G.has_edge(v, u):
-                        dummy_edges.append((u, v))
+        if show_dummy:
+            sorted_nodes = sorted(G.nodes, key=lambda n: G.nodes[n]['early_start'])
+            for i in range(len(sorted_nodes) - 1):
+                u, v = sorted_nodes[i], sorted_nodes[i + 1]
+                # Tambahkan dummy hanya jika belum ada edge antar node ini
+                if not G.has_edge(u, v) and not G.has_edge(v, u):
+                    dummy_edges.append((u, v))
 
         # Label node berisi No, ES, LS, Durasi
         label_full = {}
@@ -105,7 +101,7 @@ def calculate_cpm(data):
         nx.draw_networkx_nodes(G, pos, node_size=3500, node_color='skyblue')
         nx.draw_networkx_labels(G, pos, labels=label_full, font_size=13, font_weight='bold')
         nx.draw_networkx_edges(G, pos, edgelist=critical_path_edges, edge_color='red', width=2)
-        if dummy_edges:
+        if show_dummy and dummy_edges:
             nx.draw_networkx_edges(
                 G, pos,
                 edgelist=dummy_edges,
@@ -115,6 +111,7 @@ def calculate_cpm(data):
                 arrows=True,
                 arrowsize=20
             )
+
         plt.title(f'Critical Path: {" → ".join(critical_path)}\nTotal Duration: {critical_path_duration} hari', fontsize=20)
         plt.axis('off')
         st.pyplot(plt)
@@ -143,6 +140,9 @@ def calculate_cpm(data):
 st.sidebar.header('Critical Path Method (AOA)')
 uploaded_file = st.sidebar.file_uploader("Upload File CSV", type=["csv"])
 
+# ✅ Tambahan: tombol tampilkan dummy edge
+show_dummy = st.sidebar.checkbox("Tampilkan Dummy Edge Visual", value=True)
+
 with st.sidebar.expander("Petunjuk :", expanded=False):
     st.markdown(
         '<p style="font-size: 10px;">Jika ada lebih dari 1 kegiatan yang mendahului, pisahkan dengan tanda koma (,).<br>'
@@ -158,7 +158,7 @@ with st.sidebar.expander("Keterangan :", expanded=False):
         'LS (Late Start)    : Waktu mulai paling lambat<br>'
         'LF (Late Finish)   : Waktu selesai paling lambat<br>'
         'Slack / Float      : Waktu kelonggaran tanpa mengubah durasi proyek<br>'
-        'Dummy Edge         : Edge putus-putus berwarna hitam sebagai sambungan dummy pada AOA</p>',
+        'Dummy Edge         : Edge putus-putus berwarna hitam sebagai sambungan visual pada AOA (tidak mempengaruhi perhitungan)</p>',
         unsafe_allow_html=True
     )
 
@@ -170,6 +170,6 @@ if uploaded_file is not None:
     df = load_data(uploaded_file)
     st.write("Data yang diupload:")
     st.dataframe(df)
-    calculate_cpm(df)
+    calculate_cpm(df, show_dummy)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
