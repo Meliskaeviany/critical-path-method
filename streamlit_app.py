@@ -3,7 +3,9 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# Konfigurasi halaman
+# ==============================
+# Konfigurasi halaman Streamlit
+# ==============================
 st.set_page_config(
     page_title="CPM (Critical Path Method) AOA",
     page_icon="📊",
@@ -11,100 +13,90 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ==============================
 # Fungsi baca data CSV
+# ==============================
 def load_data(uploaded_file):
     return pd.read_csv(uploaded_file)
 
-# Fungsi utama hitung CPM dan visualisasi dengan dummy edge putus-putus hijau
+# ==============================
+# Fungsi utama: AOA (Activity on Arrow)
+# ==============================
 def calculate_cpm(data, show_dummy, dash_length, dash_gap):
     G = nx.DiGraph()
-    all_nodes = set(data['Notasi'].tolist())
 
-    # Tambah node dengan atribut durasi dan waktu awal/akhir
+    # === AOA: Edge = Aktivitas, Node = Event ===
     for _, row in data.iterrows():
-        G.add_node(row['Notasi'],
-                   duration=row['Durasi (Hari)'],
-                   early_start=0,
-                   early_finish=0,
-                   late_start=float('inf'),
-                   late_finish=float('inf'))
-
-    # Tambah edge asli sesuai predecessor
-    for _, row in data.iterrows():
-        predecessors = str(row['Kegiatan Yang Mendahului']).split(',')
-        for predecessor in predecessors:
-            predecessor = predecessor.strip()
-            if predecessor == '-' or predecessor == '':
-                continue
-            if predecessor in all_nodes:
-                G.add_edge(predecessor, row['Notasi'])
-            else:
-                st.warning(f"Notasi '{predecessor}' tidak ditemukan di data. (Node: '{row['Notasi']}')")
+        G.add_edge(
+            row['StartEvent'],
+            row['EndEvent'],
+            activity=row['Activity'],
+            duration=row['Durasi (Hari)']
+        )
 
     try:
-        # Forward pass (hitungan ES dan EF)
+        # === Forward Pass (Early Event Time) ===
+        early_event = {}
         for node in nx.topological_sort(G):
-            early_start = max([G.nodes[pred]['early_finish'] for pred in G.predecessors(node)], default=0)
-            G.nodes[node]['early_start'] = early_start
-            G.nodes[node]['early_finish'] = early_start + G.nodes[node]['duration']
-
-        # Durasi total proyek
-        project_duration = max(G.nodes[n]['early_finish'] for n in G.nodes)
-
-        # Backward pass (hitungan LS dan LF)
-        for node in reversed(list(nx.topological_sort(G))):
-            successors = list(G.successors(node))
-            if not successors:
-                G.nodes[node]['late_finish'] = project_duration
-                G.nodes[node]['late_start'] = project_duration - G.nodes[node]['duration']
+            preds = list(G.predecessors(node))
+            if preds:
+                early_event[node] = max(early_event[p] + G[p][node]['duration'] for p in preds)
             else:
-                min_ls = min([G.nodes[succ]['late_start'] for succ in successors])
-                G.nodes[node]['late_finish'] = min_ls
-                G.nodes[node]['late_start'] = min_ls - G.nodes[node]['duration']
+                early_event[node] = 0
 
-        # Hitung slack/float
-        for node in G.nodes:
-            G.nodes[node]['Slack'] = G.nodes[node]['late_start'] - G.nodes[node]['early_start']
+        # === Backward Pass (Late Event Time) ===
+        project_duration = max(early_event.values())
+        late_event = {}
+        for node in reversed(list(nx.topological_sort(G))):
+            succs = list(G.successors(node))
+            if succs:
+                late_event[node] = min(late_event[s] - G[node][s]['duration'] for s in succs)
+            else:
+                late_event[node] = project_duration
 
-        # Cari jalur kritis (node dengan slack=0)
-        critical_path = [n for n in nx.topological_sort(G) if G.nodes[n]['Slack'] == 0]
-        critical_path_edges = [(critical_path[i], critical_path[i + 1]) for i in range(len(critical_path) - 1)]
+        # === Hitung ES, EF, LS, LF, Slack tiap aktivitas ===
+        for u, v, d in G.edges(data=True):
+            d['ES'] = early_event[u]
+            d['EF'] = d['ES'] + d['duration']
+            d['LF'] = late_event[v]
+            d['LS'] = d['LF'] - d['duration']
+            d['Slack'] = d['LS'] - d['ES']
+
+        # === Critical Path ===
+        critical_edges = [(u, v) for u, v, d in G.edges(data=True) if d['Slack'] == 0]
+        critical_activities = [G[u][v]['activity'] for u, v in critical_edges]
         critical_path_duration = project_duration
 
-        # Set level node untuk layout multipartite berdasarkan early_start
+        # === Layout (tetap gaya kamu sebelumnya) ===
         for node in G.nodes:
-            G.nodes[node]['level'] = G.nodes[node]['early_start']
+            G.nodes[node]['level'] = early_event[node] if node in early_event else 0
         pos = nx.multipartite_layout(G, subset_key="level")
 
-        # === BUAT DUMMY EDGES OTOMATIS (PUTUS-PUTUS HIJAU) ===
+        # === Dummy edges (visualisasi) ===
         dummy_edges = []
         if show_dummy:
-            sorted_nodes = sorted(G.nodes, key=lambda n: G.nodes[n]['early_start'])
+            sorted_nodes = sorted(G.nodes)
             for i in range(len(sorted_nodes) - 1):
                 u, v = sorted_nodes[i], sorted_nodes[i + 1]
-                # Tambahkan dummy hanya jika belum ada edge antar node ini
                 if not G.has_edge(u, v) and not G.has_edge(v, u):
                     dummy_edges.append((u, v))
 
-        # Label node berisi No, ES, LS, Durasi
-        label_full = {}
-        for node in G.nodes:
-            no = data[data['Notasi'] == node]['No.'].values[0]
-            es = G.nodes[node]['early_start']
-            ls = G.nodes[node]['late_start']
-            dur = G.nodes[node]['duration']
-            label_full[node] = f"{no}\nES: {es}\nLS: {ls}\nD: {dur}"
-
         # === Gambar grafik ===
         plt.figure(figsize=(60, 20), dpi=500)
-        plt.rcParams['lines.dashed_pattern'] = [dash_length, dash_gap]  # atur pola putus-putus global
+        plt.rcParams['lines.dashed_pattern'] = [dash_length, dash_gap]
 
         nx.draw_networkx_edges(G, pos, edge_color='gray')
         nx.draw_networkx_nodes(G, pos, node_size=3500, node_color='skyblue')
-        nx.draw_networkx_labels(G, pos, labels=label_full, font_size=13, font_weight='bold')
-        nx.draw_networkx_edges(G, pos, edgelist=critical_path_edges, edge_color='red', width=2)
+        nx.draw_networkx_labels(G, pos, labels={n: n for n in G.nodes}, font_size=13, font_weight='bold')
 
-        # Gambar dummy edge
+        # Label edge: aktivitas + durasi
+        edge_labels = {(u, v): f"{d['activity']} ({d['duration']})" for u, v, d in G.edges(data=True)}
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_size=12)
+
+        # Garis jalur kritis (merah)
+        nx.draw_networkx_edges(G, pos, edgelist=critical_edges, edge_color='red', width=2)
+
+        # Dummy edges (putus-putus hitam)
         if show_dummy and dummy_edges:
             nx.draw_networkx_edges(
                 G, pos,
@@ -118,36 +110,43 @@ def calculate_cpm(data, show_dummy, dash_length, dash_gap):
                 connectionstyle='arc3,rad=0'
             )
 
-        plt.title(f'Critical Path: {" → ".join(critical_path)}\nTotal Duration: {critical_path_duration} hari', fontsize=20)
+        plt.title(f'Critical Path: {" → ".join(critical_activities)}\nTotal Duration: {critical_path_duration} hari',
+                  fontsize=20)
         plt.axis('off')
         st.pyplot(plt)
 
-        # Tampilkan info jalur kritis dan tabel CPM
+        # === Tampilkan tabel hasil per aktivitas ===
+        data_table = []
+        for u, v, d in G.edges(data=True):
+            data_table.append([
+                d['activity'],
+                f"{u}→{v}",
+                d['duration'],
+                d['ES'],
+                d['EF'],
+                d['LS'],
+                d['LF'],
+                d['Slack']
+            ])
+        df_result = pd.DataFrame(data_table, columns=['Activity', 'From→To', 'Durasi', 'ES', 'EF', 'LS', 'LF', 'Slack'])
+
         st.subheader("Informasi Jalur Kritis")
-        st.markdown(f"**Jalur Kritis:** {' → '.join(critical_path)}")
+        st.markdown(f"**Jalur Kritis:** {' → '.join(critical_activities)}")
         st.markdown(f"**Total Durasi Proyek:** {critical_path_duration} hari")
 
-        data_table = []
-        for node in G.nodes:
-            es = G.nodes[node]['early_start']
-            ef = G.nodes[node]['early_finish']
-            ls = G.nodes[node]['late_start']
-            lf = G.nodes[node]['late_finish']
-            slack = G.nodes[node]['Slack']
-            data_table.append([node, es, ef, ls, lf, slack])
-        df_result = pd.DataFrame(data_table, columns=['Node', 'ES', 'EF', 'LS', 'LF', 'Slack'])
-        st.subheader("Tabel Hasil Perhitungan CPM")
+        st.subheader("Tabel Hasil Perhitungan CPM (AOA)")
         st.dataframe(df_result)
 
     except nx.NetworkXUnfeasible:
         st.error("Struktur grafik tidak valid (mungkin ada siklus atau kesalahan notasi). Silakan periksa kembali.")
 
-
-# Sidebar
+# ==============================
+# Sidebar (TIDAK DIUBAH)
+# ==============================
 st.sidebar.header('Critical Path Method (AOA)')
 uploaded_file = st.sidebar.file_uploader("Upload File CSV", type=["csv"])
 
-# ✅ Tambahan kontrol visual dummy edge
+# ✅ Kontrol visual dummy edge
 show_dummy = st.sidebar.checkbox("Tampilkan Dummy Edge Visual", value=True)
 
 st.sidebar.markdown("### ⚙️ Pengaturan Dummy Edge")
@@ -156,27 +155,31 @@ dash_gap = st.sidebar.slider("Jarak antar garis (px)", 2, 20, 4)
 
 with st.sidebar.expander("Petunjuk :", expanded=False):
     st.markdown(
-        '<p style="font-size: 10px;">Jika ada lebih dari 1 kegiatan yang mendahului, pisahkan dengan tanda koma (,).<br>'
-        'Contoh: Jika kegiatan D didahului oleh B dan C, tulis sebagai B,C.</p>',
+        '<p style="font-size: 10px;">Gunakan format AOA: setiap baris menunjukkan satu aktivitas di antara dua event.<br>'
+        'Contoh: (1) → A → (2) → B → (3)</p>',
         unsafe_allow_html=True
     )
 
 with st.sidebar.expander("Keterangan :", expanded=False):
     st.markdown(
         '<p style="font-size: 10px;">'
-        'ES (Early Start)   : Waktu mulai paling awal<br>'
-        'EF (Early Finish)  : Waktu selesai paling awal<br>'
-        'LS (Late Start)    : Waktu mulai paling lambat<br>'
-        'LF (Late Finish)   : Waktu selesai paling lambat<br>'
-        'Slack / Float      : Waktu kelonggaran tanpa mengubah durasi proyek<br>'
-        'Dummy Edge         : Edge putus-putus hijau (visualisasi AOA, tidak mempengaruhi perhitungan)</p>',
+        'ES : Waktu mulai paling awal<br>'
+        'EF : Waktu selesai paling awal<br>'
+        'LS : Waktu mulai paling lambat<br>'
+        'LF : Waktu selesai paling lambat<br>'
+        'Slack : Waktu kelonggaran aktivitas<br>'
+        'Dummy Edge : Edge putus-putus hitam (visualisasi AOA, tidak mempengaruhi perhitungan)</p>',
         unsafe_allow_html=True
     )
 
+# ==============================
 # Judul halaman
+# ==============================
 st.title("📊 Critical Path Method (AOA)")
 
-# Proses upload dan kalkulasi
+# ==============================
+# Proses utama
+# ==============================
 if uploaded_file is not None:
     df = load_data(uploaded_file)
     st.write("Data yang diupload:")
@@ -184,5 +187,3 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy, dash_length, dash_gap)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
-
-
