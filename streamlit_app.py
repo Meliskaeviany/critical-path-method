@@ -105,11 +105,12 @@ def calculate_cpm(data, show_dummy):
             nx.draw_networkx_edges(
                 G, pos,
                 edgelist=dummy_edges,
-                style='dashed',
                 edge_color='black',
-                width=1,
+                width=1.5,
                 arrows=True,
-                arrowsize=20
+                arrowsize=20,
+                style='dashed',
+                linestyle=(0, (12, 6))   # 🔹 panjang & jarak garis putus-putus (atur manual di sini)
             )
 
         plt.title(f'Critical Path: {" → ".join(critical_path)}\nTotal Duration: {critical_path_duration} hari', fontsize=20)
@@ -173,4 +174,5 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
+
 
