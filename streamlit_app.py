@@ -3,20 +3,20 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# --- Konfigurasi halaman Streamlit ---
+# --- Konfigurasi halaman ---
 st.set_page_config(
     page_title="CPM (Activity on Arrow - AOA)",
     page_icon="📈",
     layout="wide",
 )
 
-st.title("📈 CPM - Activity on Arrow (AOA) dengan Dummy (Hitam Putus-Putus, Teratur Kiri → Kanan)")
+st.title("📈 CPM - Activity on Arrow (AOA) dengan Dummy (Tata Letak Rapi Kiri → Kanan)")
 
-# --- Fungsi untuk membaca data CSV ---
+# --- Fungsi untuk membaca file CSV ---
 def load_data(uploaded_file):
     return pd.read_csv(uploaded_file)
 
-# --- Fungsi membangun graf AOA (dengan dummy) ---
+# --- Bangun grafik AOA (dengan dummy) ---
 def build_aoa_graph(data):
     G = nx.DiGraph()
     activity_map = {}
@@ -54,7 +54,7 @@ def build_aoa_graph(data):
 
     return G
 
-# --- Perhitungan waktu (Forward & Backward Pass) ---
+# --- Hitung waktu CPM ---
 def calculate_aoa_times(G):
     for node in G.nodes:
         G.nodes[node]['ES'] = 0
@@ -95,48 +95,51 @@ def calculate_aoa_times(G):
     df_result = pd.DataFrame(edge_data)
     return G, df_result, project_duration
 
-# --- Layout kiri ke kanan berdasarkan urutan event ---
-def left_to_right_layout(G):
-    # urutkan node berdasarkan ES
+# --- Layout teratur kiri → kanan ---
+def ordered_layout(G):
+    # Gunakan early start (ES) untuk mengatur posisi horizontal
     levels = {}
     for node in G.nodes:
         levels[node] = G.nodes[node]['ES']
 
-    # Normalisasi posisi: kiri ke kanan
-    sorted_nodes = sorted(G.nodes, key=lambda x: levels[x])
-    pos = {}
-    x_gap = 2
-    y_gap = 2
-    for i, node in enumerate(sorted_nodes):
-        pos[node] = (i * x_gap, 0)
+    unique_levels = sorted(set(levels.values()))
+    subsets = {}
+    for i, lvl in enumerate(unique_levels):
+        subsets[lvl] = [n for n in G.nodes if levels[n] == lvl]
 
-    # Tambahkan sedikit variasi vertikal untuk cabang
-    for idx, node in enumerate(G.nodes):
-        if len(list(G.predecessors(node))) > 1 or len(list(G.successors(node))) > 1:
-            x, y = pos[node]
-            pos[node] = (x, y + ((-1)**idx) * y_gap)
+    # multipartite_layout otomatis menata dari kiri ke kanan
+    for n in G.nodes:
+        G.nodes[n]["level"] = levels[n]
+    pos = nx.multipartite_layout(G, subset_key="level", scale=2)
     return pos
 
 # --- Gambar grafik AOA ---
 def draw_aoa(G, df_result, project_duration):
-    pos = left_to_right_layout(G)
+    pos = ordered_layout(G)
     edge_labels = nx.get_edge_attributes(G, 'label')
 
     dummy_edges = [(u, v) for u, v, d in G.edges(data=True) if 'dummy' in d['label']]
     real_edges = [(u, v) for u, v, d in G.edges(data=True) if 'dummy' not in d['label']]
+    critical_edges = [
+        (row['Dari Event'], row['Ke Event'])
+        for _, row in df_result[df_result['Slack'] == 0].iterrows()
+        if 'dummy' not in row['Aktivitas']
+    ]
 
-    plt.figure(figsize=(16, 8))
-    nx.draw_networkx_nodes(G, pos, node_color='lightgray', node_size=1500)
+    plt.figure(figsize=(18, 9))
+    nx.draw_networkx_nodes(G, pos, node_color='lightgray', node_size=1800)
     nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
 
-    # Aktivitas utama (biru solid)
+    # Aktivitas utama (biru)
     nx.draw_networkx_edges(G, pos, edgelist=real_edges, edge_color='skyblue', width=2, arrows=True, arrowsize=20)
     # Dummy (hitam putus-putus)
     nx.draw_networkx_edges(G, pos, edgelist=dummy_edges, edge_color='black', style='dashed', width=1.5, arrows=True, arrowsize=15)
-    # Label edge
+    # Jalur kritis (merah tebal)
+    nx.draw_networkx_edges(G, pos, edgelist=critical_edges, edge_color='red', width=3, arrows=True, arrowsize=25)
+
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', font_size=9)
 
-    plt.title(f"Diagram AOA (Activity on Arrow)\nDummy = Garis Putus-Putus Hitam | Durasi Total: {project_duration} hari",
+    plt.title(f"Diagram AOA (Activity on Arrow)\nDummy = Hitam Putus-Putus | Jalur Kritis = Merah | Total Durasi = {project_duration} Hari",
               fontsize=14, fontweight='bold')
     plt.axis('off')
     st.pyplot(plt)
