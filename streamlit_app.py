@@ -10,13 +10,13 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("📈 CPM - Activity on Arrow (AOA)")
+st.title("📈 CPM - Activity on Arrow (AOA) Teratur dengan Dummy (Horizontal Layout)")
 
 # --- Fungsi untuk membaca data CSV ---
 def load_data(uploaded_file):
     return pd.read_csv(uploaded_file)
 
-# --- Bangun graf AOA (dengan dummy) ---
+# --- Bangun graf AOA dengan dummy ---
 def build_aoa_graph(data):
     G = nx.DiGraph()
     activity_map = {}
@@ -38,7 +38,6 @@ def build_aoa_graph(data):
             if len(set(pred_events)) == 1:
                 start = pred_events[0]
             else:
-                # Buat event baru dan tambahkan dummy edges
                 event_counter += 1
                 start = f"E{event_counter}"
                 for pe in set(pred_events):
@@ -99,21 +98,23 @@ def calculate_aoa_times(G):
     df_result = pd.DataFrame(edge_data)
     return G, df_result, project_duration
 
-# --- Layout kiri ke kanan menggunakan multipartite layout ---
-def ordered_layout(G):
-    # Tentukan level berdasarkan Early Start
-    for n in G.nodes:
-        G.nodes[n]["level"] = G.nodes[n]["ES"]
+# --- Layout horizontal manual berdasarkan topological order ---
+def horizontal_layout(G):
+    layers = {}
+    for i, node in enumerate(nx.topological_sort(G)):
+        layers[node] = i
 
-    pos = nx.multipartite_layout(G, subset_key="level", scale=3, align="horizontal")
-    # Geser posisi agar tampilan lebih kompak
-    for k, (x, y) in pos.items():
-        pos[k] = (x * 5, y * 3)
+    pos = {}
+    y_step = 2.0
+    for i, node in enumerate(G.nodes()):
+        x = layers[node] * 3.5  # jarak antar event horizontal
+        y = 0
+        pos[node] = (x, y)
     return pos
 
 # --- Gambar grafik AOA ---
 def draw_aoa(G, df_result, project_duration):
-    pos = ordered_layout(G)
+    pos = horizontal_layout(G)
     edge_labels = nx.get_edge_attributes(G, 'label')
 
     dummy_edges = [(u, v) for u, v, d in G.edges(data=True) if 'dummy' in d['label']]
@@ -124,25 +125,27 @@ def draw_aoa(G, df_result, project_duration):
         if 'dummy' not in row['Aktivitas']
     ]
 
-    plt.figure(figsize=(22, 10))
-    nx.draw_networkx_nodes(G, pos, node_color='lightgray', node_size=1400)
+    plt.figure(figsize=(18, 6))
+    nx.draw_networkx_nodes(G, pos, node_color='lightgray', node_size=1200)
     nx.draw_networkx_labels(G, pos, font_size=9, font_weight='bold')
 
-    # --- Aktivitas utama (biru solid)
+    # Aktivitas utama (biru solid)
     nx.draw_networkx_edges(G, pos, edgelist=real_edges, edge_color='skyblue',
                            width=1.8, arrows=True, arrowsize=15)
-    # --- Dummy (hitam putus-putus kecil)
+    # Dummy (hitam putus-putus kecil)
     nx.draw_networkx_edges(G, pos, edgelist=dummy_edges, edge_color='black',
                            style='dashed', width=1, arrows=True, arrowsize=8)
-    # --- Critical path (merah tebal)
+    # Critical path (merah tebal)
     nx.draw_networkx_edges(G, pos, edgelist=critical_edges, edge_color='red',
                            width=3, arrows=True, arrowsize=20)
 
-    # Label aktivitas di atas panah
+    # Label aktivitas
     nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', font_size=8)
 
-    plt.title(f"Diagram AOA (Activity on Arrow)\nDummy = Hitam Putus-Putus | Jalur Kritis = Merah | Total Durasi: {project_duration} Hari",
-              fontsize=13, fontweight='bold')
+    plt.title(
+        f"Diagram AOA (Activity on Arrow)\nDummy = Hitam Putus-Putus | Jalur Kritis = Merah | Total Durasi: {project_duration} Hari",
+        fontsize=13, fontweight='bold'
+    )
     plt.axis('off')
     st.pyplot(plt)
 
@@ -161,22 +164,6 @@ def create_csv_template():
 st.sidebar.header("📊 Pengaturan Input")
 uploaded_file = st.sidebar.file_uploader("Upload File CSV", type=["csv"])
 st.sidebar.download_button("Download Template CSV", create_csv_template(), "template_cpm_aoa.csv")
-
-with st.sidebar.expander("Petunjuk :", expanded=False):
-    st.markdown("""
-    - Pisahkan beberapa pendahulu dengan koma (,)
-    - Gunakan '-' jika tidak ada pendahulu.
-    - Dummy activity otomatis muncul untuk ketergantungan kompleks.
-    """)
-
-with st.sidebar.expander("Keterangan :", expanded=False):
-    st.markdown("""
-    **ES (Early Start)** : waktu mulai paling awal event  
-    **EF (Early Finish)** : waktu selesai paling awal  
-    **LS (Late Start)** : waktu mulai paling lambat  
-    **LF (Late Finish)** : waktu selesai paling lambat  
-    **Slack** : kelonggaran waktu aktivitas  
-    """)
 
 # --- Main ---
 if uploaded_file is not None:
