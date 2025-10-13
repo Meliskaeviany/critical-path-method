@@ -86,7 +86,7 @@ def calculate_times(G):
     return G, pd.DataFrame(edges), project_duration
 
 # =======================
-# 🗺️ SUSUN LAYOUT TEORITIS (Revisi: skala diperbesar)
+# 🗺️ SUSUN LAYOUT TEORITIS (Jarak antar node diperkecil)
 # =======================
 def layout_theory(G):
     pos = {}
@@ -95,7 +95,7 @@ def layout_theory(G):
         es = G.nodes[n]['ES']
         nodes_by_es.setdefault(es, []).append(n)
     sorted_es = sorted(nodes_by_es.keys())
-    x_scale, y_gap = 4.0, 3.0  # Jarak node diperbesar agar jelas
+    x_scale, y_gap = 2.5, 1.5  # jarak antar node diperkecil agar lebih padat
     for i, es in enumerate(sorted_es):
         x = i * x_scale
         nodes = nodes_by_es[es]
@@ -104,11 +104,11 @@ def layout_theory(G):
     return pos
 
 # =======================
-# 🎨 GAMBAR DIAGRAM AOA (Revisi: ukuran, batas, label)
+# 🎨 GAMBAR DIAGRAM AOA (Dummy label dihilangkan)
 # =======================
 def draw_aoa(G, df_result, duration):
     pos = layout_theory(G)
-    plt.figure(figsize=(16, 8))
+    plt.figure(figsize=(18, 9), facecolor='white')  # ukuran besar dan latar putih
 
     nx.draw_networkx_nodes(G, pos, node_size=1200, node_color='lightgray')
     nx.draw_networkx_labels(G, pos, font_size=12, font_weight='bold')
@@ -124,15 +124,17 @@ def draw_aoa(G, df_result, duration):
         nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], style=style, edge_color=color, width=width, arrows=True, arrowsize=20)
         x1, y1 = pos[u]
         x2, y2 = pos[v]
-        plt.text(
-            (x1 + x2) / 2,
-            (y1 + y2) / 2 + 0.3,
-            f"{lbl} ({dur})",
-            fontsize=11,
-            ha='center',
-            fontweight='bold',
-            bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1)
-        )
+        # Hanya tampilkan label kalau bukan dummy
+        if not is_dummy:
+            plt.text(
+                (x1 + x2) / 2,
+                (y1 + y2) / 2 + 0.3,
+                f"{lbl} ({dur})",
+                fontsize=11,
+                ha='center',
+                fontweight='bold',
+                bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1)
+            )
 
     plt.title(
         f"Diagram AOA (Activity on Arrow)\nDummy = Putus-Putus Hitam | Jalur Kritis = Merah | Total Durasi: {duration} hari",
@@ -140,10 +142,10 @@ def draw_aoa(G, df_result, duration):
     )
     plt.axis('off')
 
-    # Set batas sumbu supaya node tidak terlalu mepet ke tepi
+    # Set batas sumbu agar node tidak mepet tepi
     x_vals, y_vals = zip(*pos.values())
-    plt.xlim(min(x_vals) - 1, max(x_vals) + 1)
-    plt.ylim(min(y_vals) - 2, max(y_vals) + 2)
+    plt.xlim(min(x_vals) - 0.7, max(x_vals) + 0.7)
+    plt.ylim(min(y_vals) - 1.5, max(y_vals) + 1.5)
 
     st.pyplot(plt)
 
