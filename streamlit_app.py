@@ -3,20 +3,20 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# --- Konfigurasi halaman ---
+# --- Konfigurasi halaman Streamlit ---
 st.set_page_config(
     page_title="CPM (Activity on Arrow - AOA)",
     page_icon="📈",
     layout="wide",
 )
 
-st.title("📈 CPM - Activity on Arrow (AOA) dengan Dummy (Tata Letak Rapi Kiri → Kanan)")
+st.title("📈 CPM - Activity on Arrow (AOA)")
 
-# --- Fungsi untuk membaca file CSV ---
+# --- Fungsi untuk membaca data CSV ---
 def load_data(uploaded_file):
     return pd.read_csv(uploaded_file)
 
-# --- Bangun grafik AOA (dengan dummy) ---
+# --- Bangun graf AOA (dengan dummy) ---
 def build_aoa_graph(data):
     G = nx.DiGraph()
     activity_map = {}
@@ -31,7 +31,6 @@ def build_aoa_graph(data):
             if p.strip() not in ('', '-')
         ]
 
-        # Jika tidak ada pendahulu → mulai dari E1
         if not predecessors:
             start = "E1"
         else:
@@ -39,14 +38,13 @@ def build_aoa_graph(data):
             if len(set(pred_events)) == 1:
                 start = pred_events[0]
             else:
-                # buat event baru & dummy untuk konvergensi
+                # Buat event baru dan tambahkan dummy edges
                 event_counter += 1
                 start = f"E{event_counter}"
                 for pe in set(pred_events):
                     dummy_label = f"dummy_{pe}_{start}"
                     G.add_edge(pe, start, label=dummy_label, duration=0)
 
-        # buat event akhir
         event_counter += 1
         end = f"E{event_counter}"
         G.add_edge(start, end, label=activity, duration=duration)
@@ -54,7 +52,7 @@ def build_aoa_graph(data):
 
     return G
 
-# --- Hitung waktu CPM ---
+# --- Hitung waktu CPM (Forward & Backward Pass) ---
 def calculate_aoa_times(G):
     for node in G.nodes:
         G.nodes[node]['ES'] = 0
@@ -62,17 +60,23 @@ def calculate_aoa_times(G):
 
     # Forward pass
     for node in nx.topological_sort(G):
-        es = max([G.nodes[pred]['ES'] + G.edges[pred, node]['duration'] for pred in G.predecessors(node)], default=0)
+        es = max(
+            [G.nodes[pred]['ES'] + G.edges[pred, node]['duration'] for pred in G.predecessors(node)],
+            default=0
+        )
         G.nodes[node]['ES'] = es
 
     project_duration = max(G.nodes[n]['ES'] for n in G.nodes)
 
     # Backward pass
     for node in reversed(list(nx.topological_sort(G))):
-        lf = min([G.nodes[succ]['LF'] - G.edges[node, succ]['duration'] for succ in G.successors(node)], default=project_duration)
+        lf = min(
+            [G.nodes[succ]['LF'] - G.edges[node, succ]['duration'] for succ in G.successors(node)],
+            default=project_duration
+        )
         G.nodes[node]['LF'] = lf if lf != float('inf') else project_duration
 
-    # Hitung slack tiap aktivitas
+    # Slack per aktivitas
     edge_data = []
     for u, v, d in G.edges(data=True):
         es = G.nodes[u]['ES']
@@ -95,22 +99,16 @@ def calculate_aoa_times(G):
     df_result = pd.DataFrame(edge_data)
     return G, df_result, project_duration
 
-# --- Layout teratur kiri → kanan ---
+# --- Layout kiri ke kanan menggunakan multipartite layout ---
 def ordered_layout(G):
-    # Gunakan early start (ES) untuk mengatur posisi horizontal
-    levels = {}
-    for node in G.nodes:
-        levels[node] = G.nodes[node]['ES']
-
-    unique_levels = sorted(set(levels.values()))
-    subsets = {}
-    for i, lvl in enumerate(unique_levels):
-        subsets[lvl] = [n for n in G.nodes if levels[n] == lvl]
-
-    # multipartite_layout otomatis menata dari kiri ke kanan
+    # Tentukan level berdasarkan Early Start
     for n in G.nodes:
-        G.nodes[n]["level"] = levels[n]
-    pos = nx.multipartite_layout(G, subset_key="level", scale=2)
+        G.nodes[n]["level"] = G.nodes[n]["ES"]
+
+    pos = nx.multipartite_layout(G, subset_key="level", scale=3, align="horizontal")
+    # Geser posisi agar tampilan lebih kompak
+    for k, (x, y) in pos.items():
+        pos[k] = (x * 5, y * 3)
     return pos
 
 # --- Gambar grafik AOA ---
@@ -126,21 +124,25 @@ def draw_aoa(G, df_result, project_duration):
         if 'dummy' not in row['Aktivitas']
     ]
 
-    plt.figure(figsize=(18, 9))
-    nx.draw_networkx_nodes(G, pos, node_color='lightgray', node_size=1800)
-    nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
+    plt.figure(figsize=(22, 10))
+    nx.draw_networkx_nodes(G, pos, node_color='lightgray', node_size=1400)
+    nx.draw_networkx_labels(G, pos, font_size=9, font_weight='bold')
 
-    # Aktivitas utama (biru)
-    nx.draw_networkx_edges(G, pos, edgelist=real_edges, edge_color='skyblue', width=2, arrows=True, arrowsize=20)
-    # Dummy (hitam putus-putus)
-    nx.draw_networkx_edges(G, pos, edgelist=dummy_edges, edge_color='black', style='dashed', width=1.5, arrows=True, arrowsize=15)
-    # Jalur kritis (merah tebal)
-    nx.draw_networkx_edges(G, pos, edgelist=critical_edges, edge_color='red', width=3, arrows=True, arrowsize=25)
+    # --- Aktivitas utama (biru solid)
+    nx.draw_networkx_edges(G, pos, edgelist=real_edges, edge_color='skyblue',
+                           width=1.8, arrows=True, arrowsize=15)
+    # --- Dummy (hitam putus-putus kecil)
+    nx.draw_networkx_edges(G, pos, edgelist=dummy_edges, edge_color='black',
+                           style='dashed', width=1, arrows=True, arrowsize=8)
+    # --- Critical path (merah tebal)
+    nx.draw_networkx_edges(G, pos, edgelist=critical_edges, edge_color='red',
+                           width=3, arrows=True, arrowsize=20)
 
-    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', font_size=9)
+    # Label aktivitas di atas panah
+    nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', font_size=8)
 
-    plt.title(f"Diagram AOA (Activity on Arrow)\nDummy = Hitam Putus-Putus | Jalur Kritis = Merah | Total Durasi = {project_duration} Hari",
-              fontsize=14, fontweight='bold')
+    plt.title(f"Diagram AOA (Activity on Arrow)\nDummy = Hitam Putus-Putus | Jalur Kritis = Merah | Total Durasi: {project_duration} Hari",
+              fontsize=13, fontweight='bold')
     plt.axis('off')
     st.pyplot(plt)
 
