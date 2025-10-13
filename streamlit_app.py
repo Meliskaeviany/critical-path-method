@@ -174,7 +174,7 @@ with st.sidebar.expander("Keterangan :", expanded=False):
     )
 
 # Judul halaman
-st.title("📊 Critical Path Method (AOA) dengan Dummy Edge")
+st.title("📊 Critical Path Method (AOA)")
 
 # Proses upload dan kalkulasi
 if uploaded_file is not None:
@@ -184,4 +184,5 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy, dash_length, dash_gap)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
+
 
