@@ -95,7 +95,7 @@ def layout_theory(G):
         es = G.nodes[n]['ES']
         nodes_by_es.setdefault(es, []).append(n)
     sorted_es = sorted(nodes_by_es.keys())
-    x_scale, y_gap = 3.0, 2.0
+    x_scale, y_gap = 1.5, 0.8
     for i, es in enumerate(sorted_es):
         x = i * x_scale
         nodes = nodes_by_es[es]
@@ -191,3 +191,4 @@ if uploaded:
         st.error(f"Terjadi kesalahan: {e}")
 else:
     st.info("📂 Silakan upload file CSV untuk memulai perhitungan.")
+
