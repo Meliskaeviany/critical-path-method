@@ -15,8 +15,8 @@ st.set_page_config(
 def load_data(uploaded_file):
     return pd.read_csv(uploaded_file)
 
-# Fungsi utama hitung CPM dan visualisasi dengan dummy edge putus-putus hitam
-def calculate_cpm(data, show_dummy):
+# Fungsi utama hitung CPM dan visualisasi dengan dummy edge putus-putus hijau
+def calculate_cpm(data, show_dummy, dash_length, dash_gap):
     G = nx.DiGraph()
     all_nodes = set(data['Notasi'].tolist())
 
@@ -76,7 +76,7 @@ def calculate_cpm(data, show_dummy):
             G.nodes[node]['level'] = G.nodes[node]['early_start']
         pos = nx.multipartite_layout(G, subset_key="level")
 
-        # === BUAT DUMMY EDGES OTOMATIS (PUTUS-PUTUS HITAM) ===
+        # === BUAT DUMMY EDGES OTOMATIS (PUTUS-PUTUS HIJAU) ===
         dummy_edges = []
         if show_dummy:
             sorted_nodes = sorted(G.nodes, key=lambda n: G.nodes[n]['early_start'])
@@ -95,23 +95,27 @@ def calculate_cpm(data, show_dummy):
             dur = G.nodes[node]['duration']
             label_full[node] = f"{no}\nES: {es}\nLS: {ls}\nD: {dur}"
 
-        # Gambar grafik
+        # === Gambar grafik ===
         plt.figure(figsize=(60, 20), dpi=500)
+        plt.rcParams['lines.dashed_pattern'] = [dash_length, dash_gap]  # atur pola putus-putus global
+
         nx.draw_networkx_edges(G, pos, edge_color='gray')
         nx.draw_networkx_nodes(G, pos, node_size=3500, node_color='skyblue')
         nx.draw_networkx_labels(G, pos, labels=label_full, font_size=13, font_weight='bold')
         nx.draw_networkx_edges(G, pos, edgelist=critical_path_edges, edge_color='red', width=2)
+
+        # Gambar dummy edge
         if show_dummy and dummy_edges:
             nx.draw_networkx_edges(
                 G, pos,
                 edgelist=dummy_edges,
                 style='dashed',
                 edge_color='green',
-                width=1,
+                width=1.5,
+                alpha=0.9,
                 arrows=True,
                 arrowsize=20,
-                connectionstyle='arc3,rad=0.0',
-                dashes=(5, 5)  # ✅ panjang dan jarak putus-putus (bisa diubah)
+                connectionstyle='arc3,rad=0'
             )
 
         plt.title(f'Critical Path: {" → ".join(critical_path)}\nTotal Duration: {critical_path_duration} hari', fontsize=20)
@@ -138,12 +142,17 @@ def calculate_cpm(data, show_dummy):
     except nx.NetworkXUnfeasible:
         st.error("Struktur grafik tidak valid (mungkin ada siklus atau kesalahan notasi). Silakan periksa kembali.")
 
+
 # Sidebar
 st.sidebar.header('Critical Path Method (AOA)')
 uploaded_file = st.sidebar.file_uploader("Upload File CSV", type=["csv"])
 
-# ✅ Tambahan: tombol tampilkan dummy edge
+# ✅ Tambahan kontrol visual dummy edge
 show_dummy = st.sidebar.checkbox("Tampilkan Dummy Edge Visual", value=True)
+
+st.sidebar.markdown("### ⚙️ Pengaturan Dummy Edge")
+dash_length = st.sidebar.slider("Panjang garis (px)", 2, 20, 6)
+dash_gap = st.sidebar.slider("Jarak antar garis (px)", 2, 20, 4)
 
 with st.sidebar.expander("Petunjuk :", expanded=False):
     st.markdown(
@@ -160,7 +169,7 @@ with st.sidebar.expander("Keterangan :", expanded=False):
         'LS (Late Start)    : Waktu mulai paling lambat<br>'
         'LF (Late Finish)   : Waktu selesai paling lambat<br>'
         'Slack / Float      : Waktu kelonggaran tanpa mengubah durasi proyek<br>'
-        'Dummy Edge         : Edge putus-putus berwarna hitam sebagai sambungan visual pada AOA (tidak mempengaruhi perhitungan)</p>',
+        'Dummy Edge         : Edge putus-putus hijau (visualisasi AOA, tidak mempengaruhi perhitungan)</p>',
         unsafe_allow_html=True
     )
 
@@ -172,8 +181,6 @@ if uploaded_file is not None:
     df = load_data(uploaded_file)
     st.write("Data yang diupload:")
     st.dataframe(df)
-    calculate_cpm(df, show_dummy)
+    calculate_cpm(df, show_dummy, dash_length, dash_gap)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
-
-
