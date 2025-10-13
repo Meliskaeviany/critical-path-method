@@ -129,12 +129,27 @@ def create_csv_template():
     df = pd.DataFrame(data)
     return df.to_csv(index=False)
 
+# Template CSV untuk metode AOA (Activity on Arrow)
+def create_csv_template_aoa():
+    data = {
+        'No.': [1, 2, 3, 4, 5],
+        'Aktivitas': ['Start', 'A', 'B', 'C', 'Finish'],
+        'Notasi': ['Start', 'A', 'B', 'C', 'Finish'],
+        'Durasi (Hari)': [0, 5, 3, 4, 0],
+        'Kegiatan Yang Mendahului': ['-', 'Start', 'Start', 'A,B', 'C'],
+    }
+    df = pd.DataFrame(data)
+    return df.to_csv(index=False)
+
 # Sidebar
 st.sidebar.header('Critical Path Method')
 uploaded_file = st.sidebar.file_uploader("Upload Data CSV", type=["csv"])
 
 # Tombol download template
 st.sidebar.download_button("Download Template CSV", create_csv_template(), "cpm_template.csv", key="download")
+
+# Tombol download template AOA
+st.sidebar.download_button("Download Template CSV AOA", create_csv_template_aoa(), "cpm_template_aoa.csv", key="download_aoa")
 
 # Petunjuk penggunaan
 with st.sidebar.expander("Petunjuk :", expanded=False):
@@ -147,10 +162,10 @@ with st.sidebar.expander("Petunjuk :", expanded=False):
 with st.sidebar.expander("Keterangan :", expanded=False):
     st.markdown(
         '<p style="font-size: 10px;">' \
-        'ES (Early Start)   : Waktu mulai paling awal <br>'
-        'EF (Early Finish)  : Waktu selesai paling awal <br>'
-        'LS (Late Start)    : Waktu mulai paling lambat <br>'
-        'LF (Late Finish)   : Waktu selesai paling lambat <br>'
+        'ES (Early Start)   : Waktu mulai paling awal <br>'\
+        'EF (Early Finish)  : Waktu selesai paling awal <br>'\
+        'LS (Late Start)    : Waktu mulai paling lambat <br>'\
+        'LF (Late Finish)   : Waktu selesai paling lambat <br>'\
         'Slack / Float      : Waktu kelonggaran tanpa mengubah durasi proyek </p>',
         unsafe_allow_html=True
     )
