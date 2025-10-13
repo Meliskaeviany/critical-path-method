@@ -86,7 +86,7 @@ def calculate_times(G):
     return G, pd.DataFrame(edges), project_duration
 
 # =======================
-# 🗺️ SUSUN LAYOUT TEORITIS
+# 🗺️ SUSUN LAYOUT TEORITIS (Revisi: skala diperbesar)
 # =======================
 def layout_theory(G):
     pos = {}
@@ -95,7 +95,7 @@ def layout_theory(G):
         es = G.nodes[n]['ES']
         nodes_by_es.setdefault(es, []).append(n)
     sorted_es = sorted(nodes_by_es.keys())
-    x_scale, y_gap = 3.0, 2.0
+    x_scale, y_gap = 4.0, 3.0  # Jarak node diperbesar agar jelas
     for i, es in enumerate(sorted_es):
         x = i * x_scale
         nodes = nodes_by_es[es]
@@ -104,28 +104,47 @@ def layout_theory(G):
     return pos
 
 # =======================
-# 🎨 GAMBAR DIAGRAM AOA
+# 🎨 GAMBAR DIAGRAM AOA (Revisi: ukuran, batas, label)
 # =======================
 def draw_aoa(G, df_result, duration):
     pos = layout_theory(G)
-    plt.figure(figsize=(14, 6))
-    nx.draw_networkx_nodes(G, pos, node_size=1000, node_color='lightgray')
-    nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
+    plt.figure(figsize=(16, 8))
+
+    nx.draw_networkx_nodes(G, pos, node_size=1200, node_color='lightgray')
+    nx.draw_networkx_labels(G, pos, font_size=12, font_weight='bold')
 
     for _, row in df_result.iterrows():
-        u, v, lbl, dur, slack = row['Dari Event'], row['Ke Event'], row['Aktivitas'], row['Durasi'], row['Slack']
+        u, v = row['Dari Event'], row['Ke Event']
+        lbl, dur, slack = row['Aktivitas'], row['Durasi'], row['Slack']
         is_dummy = lbl.startswith("dummy")
         is_critical = (slack == 0 and not is_dummy)
         style = 'dashed' if is_dummy else 'solid'
         color = 'black' if is_dummy else ('red' if is_critical else 'skyblue')
         width = 1 if is_dummy else (3 if is_critical else 2)
-        nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], style=style, edge_color=color, width=width, arrows=True, arrowsize=15)
-        x1, y1 = pos[u]; x2, y2 = pos[v]
-        plt.text((x1+x2)/2, (y1+y2)/2+0.2, f"{lbl}({dur})", fontsize=9, ha='center')
+        nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], style=style, edge_color=color, width=width, arrows=True, arrowsize=20)
+        x1, y1 = pos[u]
+        x2, y2 = pos[v]
+        plt.text(
+            (x1 + x2) / 2,
+            (y1 + y2) / 2 + 0.3,
+            f"{lbl} ({dur})",
+            fontsize=11,
+            ha='center',
+            fontweight='bold',
+            bbox=dict(facecolor='white', alpha=0.7, edgecolor='none', pad=1)
+        )
 
-    plt.title(f"Diagram AOA (Activity on Arrow)\nDummy = Putus-Putus Hitam | Jalur Kritis = Merah | Total Durasi: {duration} hari",
-              fontsize=12, fontweight='bold')
+    plt.title(
+        f"Diagram AOA (Activity on Arrow)\nDummy = Putus-Putus Hitam | Jalur Kritis = Merah | Total Durasi: {duration} hari",
+        fontsize=16, fontweight='bold'
+    )
     plt.axis('off')
+
+    # Set batas sumbu supaya node tidak terlalu mepet ke tepi
+    x_vals, y_vals = zip(*pos.values())
+    plt.xlim(min(x_vals) - 1, max(x_vals) + 1)
+    plt.ylim(min(y_vals) - 2, max(y_vals) + 2)
+
     st.pyplot(plt)
 
 # =======================
