@@ -112,9 +112,12 @@ def calculate_cpm(data, show_dummy):
                 arrowsize=20
             )
             
-        # Ubah jarak putus-putus manual lewat objek garis
-        for edge in edge_collection:
-            edge.set_dashes([12, 6])  # 🔹 ubah di sini: [panjang_garis, jarak_putus]
+        # Beberapa versi matplotlib mengembalikan satu objek, bukan list
+        if isinstance(edge_collection, list):
+            for edge in edge_collection:
+                edge.set_dashes([12, 6])  # [panjang garis, jarak putus]
+        else:
+        edge_collection.set_dashes([12, 6])  # untuk versi non-iterable
 
         plt.title(f'Critical Path: {" → ".join(critical_path)}\nTotal Duration: {critical_path_duration} hari', fontsize=20)
         plt.axis('off')
@@ -177,4 +180,5 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
+
 
