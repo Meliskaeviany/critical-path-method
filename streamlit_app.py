@@ -110,7 +110,7 @@ def calculate_cpm(data, show_dummy, dash_length, dash_gap):
                 G, pos,
                 edgelist=dummy_edges,
                 style='dashed',
-                edge_color='green',
+                edge_color='black',
                 width=1.5,
                 alpha=0.9,
                 arrows=True,
@@ -184,3 +184,4 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy, dash_length, dash_gap)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
+
