@@ -3,19 +3,26 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import streamlit as st
 
-# --- Konfigurasi Halaman Streamlit ---
+# =======================
+# 🔧 KONFIGURASI HALAMAN
+# =======================
 st.set_page_config(
     page_title="CPM - Activity on Arrow (AOA)",
     page_icon="📈",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
-st.title("📈 CPM - Activity on Arrow (AOA) dengan Dummy & Perhitungan Lengkap")
+st.title("📈 CPM - Activity on Arrow (AOA) dengan Dummy (Theory Style)")
 
-# --- Fungsi Membaca File CSV ---
+# =======================
+# 📥 BACA DATA
+# =======================
 def load_data(uploaded_file):
     return pd.read_csv(uploaded_file)
 
-# --- Bangun Jaringan AOA ---
+# =======================
+# 🧩 BANGUN JARINGAN AOA
+# =======================
 def build_aoa_graph(data):
     G = nx.DiGraph()
     activity_map = {}
@@ -43,26 +50,24 @@ def build_aoa_graph(data):
         end = f"E{event_counter}"
         G.add_edge(start, end, label=act, duration=dur)
         activity_map[act] = (start, end)
-
     return G
 
-# --- Hitung ES, EF, LS, LF, Slack ---
+# =======================
+# 🧮 HITUNG WAKTU (ES, LS, DLL)
+# =======================
 def calculate_times(G):
     for n in G.nodes:
         G.nodes[n]['ES'] = 0
         G.nodes[n]['LF'] = float('inf')
 
-    # Forward Pass
     for n in nx.topological_sort(G):
         G.nodes[n]['ES'] = max([G.nodes[p]['ES'] + G.edges[p, n]['duration'] for p in G.predecessors(n)], default=0)
 
     project_duration = max(G.nodes[n]['ES'] for n in G.nodes)
 
-    # Backward Pass
     for n in reversed(list(nx.topological_sort(G))):
         G.nodes[n]['LF'] = min([G.nodes[s]['LF'] - G.edges[n, s]['duration'] for s in G.successors(n)], default=project_duration)
 
-    # Simpan hasil aktivitas
     edges = []
     for u, v, d in G.edges(data=True):
         es = G.nodes[u]['ES']
@@ -75,40 +80,114 @@ def calculate_times(G):
             'Ke Event': v,
             'Aktivitas': d['label'],
             'Durasi': d['duration'],
-            'ES': es,
-            'EF': ef,
-            'LS': ls,
-            'LF': lf,
-            'Slack': slack
+            'ES': es, 'EF': ef, 'LS': ls, 'LF': lf, 'Slack': slack
         })
 
-    df_result = pd.DataFrame(edges)
-    return G, df_result, project_duration
+    return G, pd.DataFrame(edges), project_duration
 
-# --- Layout Teoritis Horizontal ---
+# =======================
+# 🗺️ SUSUN LAYOUT TEORITIS
+# =======================
 def layout_theory(G):
     pos = {}
-    nodes = list(nx.topological_sort(G))
-    spacing_x = 4.0
-    for i, node in enumerate(nodes):
-        pos[node] = (i * spacing_x, 0)
+    nodes_by_es = {}
+    for n in G.nodes:
+        es = G.nodes[n]['ES']
+        nodes_by_es.setdefault(es, []).append(n)
+    sorted_es = sorted(nodes_by_es.keys())
+    x_scale, y_gap = 3.0, 2.0
+    for i, es in enumerate(sorted_es):
+        x = i * x_scale
+        nodes = nodes_by_es[es]
+        for j, n in enumerate(nodes):
+            pos[n] = (x, j * y_gap - (len(nodes)-1)*y_gap/2)
     return pos
 
-# --- Gambar Diagram AOA ---
-def draw_diagram(G, df_result, project_duration):
+# =======================
+# 🎨 GAMBAR DIAGRAM AOA
+# =======================
+def draw_aoa(G, df_result, duration):
     pos = layout_theory(G)
-    plt.figure(figsize=(15, 6))
+    plt.figure(figsize=(14, 6))
     nx.draw_networkx_nodes(G, pos, node_size=1000, node_color='lightgray')
     nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
 
     for _, row in df_result.iterrows():
-        u, v = row['Dari Event'], row['Ke Event']
-        dur = row['Durasi']
-        lbl = row['Aktivitas']
-        slack = row['Slack']
+        u, v, lbl, dur, slack = row['Dari Event'], row['Ke Event'], row['Aktivitas'], row['Durasi'], row['Slack']
         is_dummy = lbl.startswith("dummy")
         is_critical = (slack == 0 and not is_dummy)
-
         style = 'dashed' if is_dummy else 'solid'
         color = 'black' if is_dummy else ('red' if is_critical else 'skyblue')
-        width = 1 if i
+        width = 1 if is_dummy else (3 if is_critical else 2)
+        nx.draw_networkx_edges(G, pos, edgelist=[(u, v)], style=style, edge_color=color, width=width, arrows=True, arrowsize=15)
+        x1, y1 = pos[u]; x2, y2 = pos[v]
+        plt.text((x1+x2)/2, (y1+y2)/2+0.2, f"{lbl}({dur})", fontsize=9, ha='center')
+
+    plt.title(f"Diagram AOA (Activity on Arrow)\nDummy = Putus-Putus Hitam | Jalur Kritis = Merah | Total Durasi: {duration} hari",
+              fontsize=12, fontweight='bold')
+    plt.axis('off')
+    st.pyplot(plt)
+
+# =======================
+# 📄 TEMPLATE CSV
+# =======================
+def create_csv_template():
+    data = {
+        'No.': [1, 2, 3, 4, 5],
+        'Aktivitas': ['Pembersihan', 'Galian Tanah', 'Urugan', 'Pondasi', 'Pengecoran'],
+        'Notasi': ['A', 'B', 'C', 'D', 'E'],
+        'Durasi (Hari)': [5, 3, 2, 4, 6],
+        'Kegiatan Yang Mendahului': ['-', 'A', 'A', 'B,C', 'D']
+    }
+    return pd.DataFrame(data).to_csv(index=False)
+
+# =======================
+# 🎛️ SIDEBAR DESAIN
+# =======================
+st.sidebar.header("📊 Pengaturan Input")
+uploaded = st.sidebar.file_uploader("Upload File CSV", type=["csv"])
+st.sidebar.download_button("Download Template CSV", create_csv_template(), "template_aoa.csv")
+
+with st.sidebar.expander("📘 Petunjuk :", expanded=False):
+    st.markdown("""
+    - Gunakan koma (,) untuk memisahkan beberapa pendahulu.  
+    - Gunakan '-' bila tidak ada pendahulu.  
+    - Dummy activity dibuat otomatis jika diperlukan.
+    """)
+
+with st.sidebar.expander("📗 Keterangan :", expanded=False):
+    st.markdown("""
+    **ES (Early Start)** : Waktu mulai paling awal  
+    **EF (Early Finish)** : Waktu selesai paling awal  
+    **LS (Late Start)** : Waktu mulai paling lambat  
+    **LF (Late Finish)** : Waktu selesai paling lambat  
+    **Slack** : Waktu kelonggaran aktivitas  
+    """)
+
+# =======================
+# 🚀 PROSES UTAMA
+# =======================
+if uploaded:
+    df = load_data(uploaded)
+    st.subheader("📋 Data Aktivitas")
+    st.dataframe(df)
+
+    try:
+        G = build_aoa_graph(df)
+        G, df_result, duration = calculate_times(G)
+
+        st.subheader("📈 Diagram AOA (Activity on Arrow)")
+        draw_aoa(G, df_result, duration)
+
+        st.subheader("🧮 Hasil Perhitungan CPM (AOA)")
+        st.dataframe(df_result.style.format(precision=2))
+
+        critical = df_result[(df_result['Slack'] == 0) & (~df_result['Aktivitas'].str.startswith('dummy'))]
+        critical_path = ' → '.join(critical['Aktivitas'])
+        st.success(f"**Jalur Kritis (Critical Path):** {critical_path}")
+        st.info(f"**Durasi Total Proyek:** {duration} hari")
+
+    except Exception as e:
+        st.error(f"Terjadi kesalahan: {e}")
+else:
+    st.info("📂 Silakan upload file CSV untuk memulai perhitungan.")
