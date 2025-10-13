@@ -3,12 +3,19 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import streamlit as st
 
-st.set_page_config(page_title="AOA CPM", layout="wide")
-st.title("Diagram AOA (Theory Style) dengan Dummy")
+# --- Konfigurasi Halaman Streamlit ---
+st.set_page_config(
+    page_title="CPM - Activity on Arrow (AOA)",
+    page_icon="📈",
+    layout="wide",
+)
+st.title("📈 CPM - Activity on Arrow (AOA) dengan Dummy & Perhitungan Lengkap")
 
+# --- Fungsi Membaca File CSV ---
 def load_data(uploaded_file):
     return pd.read_csv(uploaded_file)
 
+# --- Bangun Jaringan AOA ---
 def build_aoa_graph(data):
     G = nx.DiGraph()
     activity_map = {}
@@ -19,6 +26,7 @@ def build_aoa_graph(data):
         act = row['Notasi']
         dur = row['Durasi (Hari)']
         preds = [p.strip() for p in str(row['Kegiatan Yang Mendahului']).split(',') if p.strip() not in ('', '-')]
+
         if not preds:
             start = "E1"
         else:
@@ -30,21 +38,31 @@ def build_aoa_graph(data):
                 start = f"E{event_counter}"
                 for pe in set(pred_events):
                     G.add_edge(pe, start, label=f"dummy_{pe}_{start}", duration=0)
+
         event_counter += 1
         end = f"E{event_counter}"
         G.add_edge(start, end, label=act, duration=dur)
         activity_map[act] = (start, end)
+
     return G
 
+# --- Hitung ES, EF, LS, LF, Slack ---
 def calculate_times(G):
     for n in G.nodes:
         G.nodes[n]['ES'] = 0
         G.nodes[n]['LF'] = float('inf')
+
+    # Forward Pass
     for n in nx.topological_sort(G):
         G.nodes[n]['ES'] = max([G.nodes[p]['ES'] + G.edges[p, n]['duration'] for p in G.predecessors(n)], default=0)
-    proj_dur = max(G.nodes[n]['ES'] for n in G.nodes)
+
+    project_duration = max(G.nodes[n]['ES'] for n in G.nodes)
+
+    # Backward Pass
     for n in reversed(list(nx.topological_sort(G))):
-        G.nodes[n]['LF'] = min([G.nodes[s]['LF'] - G.edges[n, s]['duration'] for s in G.successors(n)], default=proj_dur)
+        G.nodes[n]['LF'] = min([G.nodes[s]['LF'] - G.edges[n, s]['duration'] for s in G.successors(n)], default=project_duration)
+
+    # Simpan hasil aktivitas
     edges = []
     for u, v, d in G.edges(data=True):
         es = G.nodes[u]['ES']
@@ -52,69 +70,45 @@ def calculate_times(G):
         lf = G.nodes[v]['LF']
         ls = lf - d['duration']
         slack = ls - es
-        edges.append({'u': u, 'v': v, 'label': d['label'], 'dur': d['duration'], 'slack': slack})
-    return G, edges, proj_dur
+        edges.append({
+            'Dari Event': u,
+            'Ke Event': v,
+            'Aktivitas': d['label'],
+            'Durasi': d['duration'],
+            'ES': es,
+            'EF': ef,
+            'LS': ls,
+            'LF': lf,
+            'Slack': slack
+        })
 
-def layout_theory(G, edges):
-    # Tentukan posisi event (node) di sumbu x = ES
+    df_result = pd.DataFrame(edges)
+    return G, df_result, project_duration
+
+# --- Layout Teoritis Horizontal ---
+def layout_theory(G):
     pos = {}
-    # group nodes by ES value
-    nodes_by_es = {}
-    for n in G.nodes:
-        es = G.nodes[n]['ES']
-        nodes_by_es.setdefault(es, []).append(n)
-    # sort unique ES
-    sorted_es = sorted(nodes_by_es.keys())
-    # x spacing
-    x_scale = 3.0
-    y_gap = 2.0
-    for i, es in enumerate(sorted_es):
-        xs = i * x_scale
-        ys_list = nodes_by_es[es]
-        # beri distribusi y agar node tidak semuanya di y = 0
-        for j, n in enumerate(ys_list):
-            pos[n] = (xs, j * y_gap - (len(ys_list)-1)*y_gap/2)
+    nodes = list(nx.topological_sort(G))
+    spacing_x = 4.0
+    for i, node in enumerate(nodes):
+        pos[node] = (i * spacing_x, 0)
     return pos
 
-def draw_diagram(G, edges, proj_dur):
-    pos = layout_theory(G, edges)
-    plt.figure(figsize=(12, 6))
-    # draw nodes
-    nx.draw_networkx_nodes(G, pos, node_size=800, node_color='lightgray')
-    nx.draw_networkx_labels(G, pos, font_size=10)
-    # draw edges
-    for e in edges:
-        u, v = e['u'], e['v']
-        dur = e['dur']
-        lbl = e['label']
-        slack = e['slack']
+# --- Gambar Diagram AOA ---
+def draw_diagram(G, df_result, project_duration):
+    pos = layout_theory(G)
+    plt.figure(figsize=(15, 6))
+    nx.draw_networkx_nodes(G, pos, node_size=1000, node_color='lightgray')
+    nx.draw_networkx_labels(G, pos, font_size=10, font_weight='bold')
+
+    for _, row in df_result.iterrows():
+        u, v = row['Dari Event'], row['Ke Event']
+        dur = row['Durasi']
+        lbl = row['Aktivitas']
+        slack = row['Slack']
         is_dummy = lbl.startswith("dummy")
         is_critical = (slack == 0 and not is_dummy)
-        # choose style
-        style = 'dashed' if is_dummy else 'solid'
-        color = 'black' if is_dummy else ('red' if is_critical else 'blue')
-        width = 1.0 if is_dummy else (2.5 if is_critical else 1.8)
-        # draw arrow: proportion panjang relatif durasi
-        # we will draw a straight arrow, but label with duration
-        nx.draw_networkx_edges(
-            G, pos, edgelist=[(u, v)], style=style, edge_color=color,
-            width=width, arrows=True, arrowsize=15,
-        )
-        # place label (activity + durasi) at mid point
-        x1, y1 = pos[u]
-        x2, y2 = pos[v]
-        xm, ym = (x1 + x2)/2, (y1 + y2)/2
-        plt.text(xm, ym + 0.2, f"{lbl}({dur})", fontsize=9, ha='center')
-    plt.title(f"Diagram AOA (Theory Style) — Durasi Total = {proj_dur}")
-    plt.axis('off')
-    st.pyplot(plt)
 
-# Streamlit app
-uploaded = st.sidebar.file_uploader("CSV", type=["csv"])
-if uploaded:
-    df = load_data(uploaded)
-    st.dataframe(df)
-    G, edges, pdur = calculate_times(build_aoa_graph(df))
-    draw_diagram(G, edges, pdur)
-else:
-    st.info("Upload file CSV")
+        style = 'dashed' if is_dummy else 'solid'
+        color = 'black' if is_dummy else ('red' if is_critical else 'skyblue')
+        width = 1 if i
