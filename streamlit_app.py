@@ -160,7 +160,16 @@ def calculate_cpm(data, show_dummy, dash_length, dash_gap):
 st.sidebar.header('Critical Path Method (AOA)')
 uploaded_file = st.sidebar.file_uploader("Upload File CSV", type=["csv"])
 
-# ✅ Tambahan kontrol visual dummy edge
+# Tombol download template CSV
+st.sidebar.header('Critical Path Method (AOA)')
+st.sidebar.download_button(
+    label="📥 Download Template CSV",
+    data=download_template(),
+    file_name="template_cpm.csv",
+    mime="text/csv"
+)
+
+# Tambahan kontrol visual dummy edge
 show_dummy = st.sidebar.checkbox("Tampilkan Dummy Edge Visual", value=True)
 
 st.sidebar.markdown("### ⚙️ Pengaturan Dummy Edge")
@@ -197,5 +206,6 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy, dash_length, dash_gap)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
+
 
 
