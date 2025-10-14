@@ -157,7 +157,7 @@ def calculate_cpm(data, show_dummy, dash_length, dash_gap):
 
 
 # Sidebar
-st.sidebar.header('Critical Path Method (CPM')
+st.sidebar.header('Critical Path Method (CPM)')
 uploaded_file = st.sidebar.file_uploader("Upload File CSV", type=["csv"])
 
 # Tombol download template CSV
@@ -205,6 +205,7 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy, dash_length, dash_gap)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
+
 
 
 
