@@ -15,6 +15,19 @@ st.set_page_config(
 def load_data(uploaded_file):
     return pd.read_csv(uploaded_file)
 
+# Fungsi Download Template
+def download_template():
+    """Membuat template CSV untuk contoh input"""
+    template_data = {
+        'No.': [1, 2, 3, 4],
+        'Kegiatan': ['A', 'B', 'C', 'D'],
+        'Durasi (Hari)': [5, 3, 2, 4],
+        'Kegiatan Yang Mendahului': ['-', 'A', 'A', 'B,C'],
+        'Notasi': ['A', 'B', 'C', 'D']
+    }
+    df_template = pd.DataFrame(template_data)
+    return df_template.to_csv(index=False).encode('utf-8')
+
 # Fungsi utama hitung CPM dan visualisasi dengan dummy edge putus-putus hijau
 def calculate_cpm(data, show_dummy, dash_length, dash_gap):
     G = nx.DiGraph()
@@ -184,4 +197,5 @@ if uploaded_file is not None:
     calculate_cpm(df, show_dummy, dash_length, dash_gap)
 else:
     st.info("Silakan upload file CSV terlebih dahulu.")
+
 
